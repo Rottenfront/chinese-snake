@@ -63,11 +63,13 @@ impl CameraUniform {
     }
 }
 
+const SAMPLE_COUNT: u32 = 4;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
-    position: [f32; 3],
-    color: [f32; 3],
+    pos: [f32; 3],
+    normal: [f32; 3],
 }
 
 impl Vertex {
@@ -98,52 +100,52 @@ mod sphere {
 
         let vertices = vec![
             Vertex {
-                position: [-1.0, t, 0.0],
-                color: [0.0, 1.0, 0.0],
+                pos: [-1.0, t, 0.0],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [1.0, t, 0.0],
-                color: [0.0, 1.0, 0.0],
+                pos: [1.0, t, 0.0],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [-1.0, -t, 0.0],
-                color: [0.0, 1.0, 0.0],
+                pos: [-1.0, -t, 0.0],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [1.0, -t, 0.0],
-                color: [0.0, 1.0, 0.0],
+                pos: [1.0, -t, 0.0],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [0.0, -1.0, t],
-                color: [0.0, 1.0, 0.0],
+                pos: [0.0, -1.0, t],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [0.0, 1.0, t],
-                color: [0.0, 1.0, 0.0],
+                pos: [0.0, 1.0, t],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [0.0, -1.0, -t],
-                color: [0.0, 1.0, 0.0],
+                pos: [0.0, -1.0, -t],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [0.0, 1.0, -t],
-                color: [0.0, 1.0, 0.0],
+                pos: [0.0, 1.0, -t],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [t, 0.0, -1.0],
-                color: [0.0, 1.0, 0.0],
+                pos: [t, 0.0, -1.0],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [t, 0.0, 1.0],
-                color: [0.0, 1.0, 0.0],
+                pos: [t, 0.0, 1.0],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [-t, 0.0, -1.0],
-                color: [0.0, 1.0, 0.0],
+                pos: [-t, 0.0, -1.0],
+                normal: [0.0, 1.0, 0.0],
             },
             Vertex {
-                position: [-t, 0.0, 1.0],
-                color: [0.0, 1.0, 0.0],
+                pos: [-t, 0.0, 1.0],
+                normal: [0.0, 1.0, 0.0],
             },
         ];
 
@@ -174,13 +176,13 @@ mod sphere {
     }
 
     fn normalize_vertex(vertex: &mut Vertex) {
-        let length = (vertex.position[0] * vertex.position[0]
-            + vertex.position[1] * vertex.position[1]
-            + vertex.position[2] * vertex.position[2])
+        let length = (vertex.pos[0] * vertex.pos[0]
+            + vertex.pos[1] * vertex.pos[1]
+            + vertex.pos[2] * vertex.pos[2])
             .sqrt();
-        vertex.position[0] /= length;
-        vertex.position[1] /= length;
-        vertex.position[2] /= length;
+        vertex.pos[0] /= length;
+        vertex.pos[1] /= length;
+        vertex.pos[2] /= length;
     }
 
     fn subdivide(
@@ -228,12 +230,12 @@ mod sphere {
         let v1 = &vertices[index1];
         let v2 = &vertices[index2];
         let mut mid_vertex = Vertex {
-            position: [
-                (v1.position[0] + v2.position[0]) / 2.0,
-                (v1.position[1] + v2.position[1]) / 2.0,
-                (v1.position[2] + v2.position[2]) / 2.0,
+            pos: [
+                (v1.pos[0] + v2.pos[0]) / 2.0,
+                (v1.pos[1] + v2.pos[1]) / 2.0,
+                (v1.pos[2] + v2.pos[2]) / 2.0,
             ],
-            color: [0.0, 1.0, 0.0],
+            normal: [0.0, 1.0, 0.0],
         };
         normalize_vertex(&mut mid_vertex);
 
@@ -260,9 +262,9 @@ mod sphere {
 
         // Translate and scale the vertices to the desired center and radius
         for vertex in &mut vertices {
-            vertex.position[0] = vertex.position[0] * radius + center[0];
-            vertex.position[1] = vertex.position[1] * radius + center[1];
-            vertex.position[2] = vertex.position[2] * radius + center[2];
+            vertex.pos[0] = vertex.pos[0] * radius + center[0];
+            vertex.pos[1] = vertex.pos[1] * radius + center[1];
+            vertex.pos[2] = vertex.pos[2] * radius + center[2];
         }
 
         let indices: Vec<u16> = indices
@@ -277,11 +279,11 @@ mod sphere {
 
 fn generate_snake() -> (Vec<Vertex>, Vec<u16>) {
     const LEN: usize = 200;
-    const CIRCLE_POINTS: usize = 200;
+    const CIRCLE_POINTS: usize = 30;
     let mut vertices = vec![
         Vertex {
-            position: [0.0, 0.0, 0.0],
-            color: [0.0, 1.0, 0.0]
+            pos: [0.0, 0.0, 0.0],
+            normal: [0.0, 1.0, 0.0]
         };
         CIRCLE_POINTS * LEN
     ];
@@ -331,48 +333,73 @@ fn generate_snake() -> (Vec<Vertex>, Vec<u16>) {
                 normal[2] * y1 + binormal[2] * z1,
             ];
 
-            vertices[i * CIRCLE_POINTS + j].position = circle_point;
+            vertices[i * CIRCLE_POINTS + j].pos = circle_point;
         }
     }
-
+    let mut res_vertices = Vec::new();
     let mut indices = Vec::new();
 
     let mut push_triangle = |v1, v2, v3| {
-        indices.push(v1 as u16);
-        indices.push(v2 as u16);
-        indices.push(v3 as u16);
+        let mut p0: Vertex = vertices[v1];
+        let mut p1: Vertex = vertices[v2];
+        let mut p2: Vertex = vertices[v3];
+        let u = [
+            p1.pos[0] - p0.pos[0],
+            p1.pos[1] - p0.pos[1],
+            p1.pos[2] - p0.pos[2],
+        ];
+        let v = [
+            p2.pos[0] - p0.pos[0],
+            p2.pos[1] - p0.pos[1],
+            p2.pos[2] - p0.pos[2],
+        ];
+        let normal = [
+            u[1] * v[2] - u[2] * v[1], // x-component
+            u[2] * v[0] - u[0] * v[2], // y-component
+            u[0] * v[1] - u[1] * v[0], // z-component
+        ];
+        p0.normal = normal;
+        p1.normal = normal;
+        p2.normal = normal;
+
+        indices.push(res_vertices.len() as u16);
+        res_vertices.push(p0);
+        indices.push(res_vertices.len() as u16);
+        res_vertices.push(p1);
+        indices.push(res_vertices.len() as u16);
+        res_vertices.push(p2);
     };
 
     for i in 0..LEN - 1 {
         // Push last triangle
         push_triangle(
             (i + 1) * CIRCLE_POINTS - 1,
-            (i + 2) * CIRCLE_POINTS - 1,
             i * CIRCLE_POINTS,
+            (i + 2) * CIRCLE_POINTS - 1,
         );
         push_triangle(
             (i + 2) * CIRCLE_POINTS - 1,
-            (i + 1) * CIRCLE_POINTS,
             i * CIRCLE_POINTS,
+            (i + 1) * CIRCLE_POINTS,
         );
 
         for j in 0..CIRCLE_POINTS - 1 {
             push_triangle(
                 i * CIRCLE_POINTS + j,
-                (i + 1) * CIRCLE_POINTS + j,
                 i * CIRCLE_POINTS + j + 1,
+                (i + 1) * CIRCLE_POINTS + j,
             );
             push_triangle(
                 (i + 1) * CIRCLE_POINTS + j,
-                (i + 1) * CIRCLE_POINTS + j + 1,
                 i * CIRCLE_POINTS + j + 1,
+                (i + 1) * CIRCLE_POINTS + j + 1,
             );
         }
     }
 
     indices.push(0);
 
-    (vertices, indices)
+    (res_vertices, indices)
 }
 
 struct State<'a> {
@@ -631,7 +658,7 @@ impl<'a> State<'a> {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState {
-                count: 8,
+                count: SAMPLE_COUNT,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
@@ -719,7 +746,7 @@ impl<'a> State<'a> {
                         depth_or_array_layers: 1,
                     },
                     mip_level_count: 1,
-                    sample_count: 8,
+                    sample_count: SAMPLE_COUNT,
                     dimension: wgpu::TextureDimension::D2,
                     format: self.config.format,
                     usage: TextureUsages::RENDER_ATTACHMENT,
@@ -739,7 +766,7 @@ impl<'a> State<'a> {
                             depth_or_array_layers: 1,
                         },
                         mip_level_count: 1,
-                        sample_count: 8,
+                        sample_count: SAMPLE_COUNT,
                         dimension: wgpu::TextureDimension::D2,
                         format: self.config.format,
                         usage: TextureUsages::RENDER_ATTACHMENT,
@@ -779,7 +806,7 @@ impl<'a> State<'a> {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             self.snake.render(&mut render_pass);
-            self.sphere.render(&mut render_pass);
+            // self.sphere.render(&mut render_pass);
         }
 
         queue.submit(iter::once(encoder.finish()));

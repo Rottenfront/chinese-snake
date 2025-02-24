@@ -14,4 +14,4 @@ pollster = "0.3"
 bytemuck = { version = "1.16", features = [ "derive" ] }
 cgmath = "*"
 
-glyphon = { git = "https://github.com/grovesNL/glyphon/" }
+# glyphon = { git = "https://github.com/grovesNL/glyphon/" }
