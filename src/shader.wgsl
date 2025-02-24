@@ -33,7 +33,7 @@ fn vs_main(
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let up = in.normal.y * 0.5 + 0.5;
     let color = vec3<f32>(0.0, 1.0, 0.0);
-    let ambient_down = vec3<f32>(0.0, 0.0, 0.0);
+    let ambient_down = vec3<f32>(0.1, 0.1, 0.1);
     let ambient_up = vec3<f32>(1.0, 1.0, 1.0);
     let ambient = ambient_down + ambient_up * up;
     return vec4<f32>(color * ambient, 1.0);

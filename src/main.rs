@@ -1,14 +1,11 @@
 use std::{f32::consts::PI, iter};
-use wgpu::{util::DeviceExt, MultisampleState, RenderPass, TextureUsages};
+use wgpu::{util::DeviceExt, RenderPass, TextureUsages};
 use winit::{
     event::*,
     event_loop::EventLoop,
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
-
-#[cfg(target_arch = "wasm32")]
-use wasm_bindgen::prelude::*;
 
 struct Camera {
     eye: cgmath::Point3<f32>,
@@ -93,191 +90,127 @@ impl Vertex {
     }
 }
 
-mod sphere {
-    use super::Vertex;
-    fn create_icosahedron() -> (Vec<Vertex>, Vec<[usize; 3]>) {
-        let t = (1.0 + (5.0 as f32).sqrt()) / 2.0;
+fn push_triangle(
+    start_idx: u16,
+    vertices: &mut Vec<Vertex>,
+    indices: &mut Vec<u16>,
+    v1: usize,
+    v2: usize,
+    v3: usize,
+) {
+    let u = [
+        vertices[v2].pos[0] - vertices[v1].pos[0],
+        vertices[v2].pos[1] - vertices[v1].pos[1],
+        vertices[v2].pos[2] - vertices[v1].pos[2],
+    ];
+    let v = [
+        vertices[v3].pos[0] - vertices[v1].pos[0],
+        vertices[v3].pos[1] - vertices[v1].pos[1],
+        vertices[v3].pos[2] - vertices[v1].pos[2],
+    ];
+    let normal = [
+        u[1] * v[2] - u[2] * v[1], // x-component
+        u[2] * v[0] - u[0] * v[2], // y-component
+        u[0] * v[1] - u[1] * v[0], // z-component
+    ];
+    vertices[v1].normal[0] += normal[0];
+    vertices[v1].normal[1] += normal[1];
+    vertices[v1].normal[2] += normal[2];
+    vertices[v2].normal[0] += normal[0];
+    vertices[v2].normal[1] += normal[1];
+    vertices[v2].normal[2] += normal[2];
+    vertices[v3].normal[0] += normal[0];
+    vertices[v3].normal[1] += normal[1];
+    vertices[v3].normal[2] += normal[2];
 
-        let vertices = vec![
-            Vertex {
-                pos: [-1.0, t, 0.0],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [1.0, t, 0.0],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [-1.0, -t, 0.0],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [1.0, -t, 0.0],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [0.0, -1.0, t],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [0.0, 1.0, t],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [0.0, -1.0, -t],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [0.0, 1.0, -t],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [t, 0.0, -1.0],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [t, 0.0, 1.0],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [-t, 0.0, -1.0],
-                normal: [0.0, 1.0, 0.0],
-            },
-            Vertex {
-                pos: [-t, 0.0, 1.0],
-                normal: [0.0, 1.0, 0.0],
-            },
-        ];
-
-        let indices = vec![
-            [0, 11, 5],
-            [0, 5, 1],
-            [0, 1, 7],
-            [0, 7, 10],
-            [0, 10, 11],
-            [1, 5, 9],
-            [5, 11, 4],
-            [11, 10, 2],
-            [10, 7, 6],
-            [7, 1, 8],
-            [3, 9, 4],
-            [3, 4, 2],
-            [3, 2, 6],
-            [3, 6, 8],
-            [3, 8, 9],
-            [4, 9, 5],
-            [2, 4, 11],
-            [6, 2, 10],
-            [8, 6, 7],
-            [9, 8, 1],
-        ];
-
-        (vertices, indices)
-    }
-
-    fn normalize_vertex(vertex: &mut Vertex) {
-        let length = (vertex.pos[0] * vertex.pos[0]
-            + vertex.pos[1] * vertex.pos[1]
-            + vertex.pos[2] * vertex.pos[2])
-            .sqrt();
-        vertex.pos[0] /= length;
-        vertex.pos[1] /= length;
-        vertex.pos[2] /= length;
-    }
-
-    fn subdivide(
-        vertices: Vec<Vertex>,
-        indices: Vec<[usize; 3]>,
-    ) -> (Vec<Vertex>, Vec<[usize; 3]>) {
-        let mut new_vertices = vertices.clone();
-        let mut new_indices = Vec::new();
-        let mut mid_points = std::collections::HashMap::new();
-
-        for triangle in indices {
-            let v1 = triangle[0];
-            let v2 = triangle[1];
-            let v3 = triangle[2];
-
-            let mid1 = get_mid_point(&mut mid_points, &mut new_vertices, v1, v2);
-            let mid2 = get_mid_point(&mut mid_points, &mut new_vertices, v2, v3);
-            let mid3 = get_mid_point(&mut mid_points, &mut new_vertices, v3, v1);
-
-            new_indices.push([v1, mid1, mid3]);
-            new_indices.push([v2, mid2, mid1]);
-            new_indices.push([v3, mid3, mid2]);
-            new_indices.push([mid1, mid2, mid3]);
-        }
-
-        (new_vertices, new_indices)
-    }
-
-    fn get_mid_point(
-        mid_points: &mut std::collections::HashMap<(usize, usize), usize>,
-        vertices: &mut Vec<Vertex>,
-        index1: usize,
-        index2: usize,
-    ) -> usize {
-        let key = if index1 < index2 {
-            (index1, index2)
-        } else {
-            (index2, index1)
-        };
-
-        if let Some(&mid_point) = mid_points.get(&key) {
-            return mid_point;
-        }
-
-        let v1 = &vertices[index1];
-        let v2 = &vertices[index2];
-        let mut mid_vertex = Vertex {
-            pos: [
-                (v1.pos[0] + v2.pos[0]) / 2.0,
-                (v1.pos[1] + v2.pos[1]) / 2.0,
-                (v1.pos[2] + v2.pos[2]) / 2.0,
-            ],
-            normal: [0.0, 1.0, 0.0],
-        };
-        normalize_vertex(&mut mid_vertex);
-
-        let index = vertices.len();
-        vertices.push(mid_vertex);
-        mid_points.insert(key, index);
-
-        index
-    }
-
-    pub fn create_sphere(
-        subdivisions: usize,
-        center: [f32; 3],
-        radius: f32,
-    ) -> (Vec<Vertex>, Vec<u16>) {
-        let (mut vertices, mut indices) = create_icosahedron();
-
-        // Subdivide the icosahedron to create a more detailed sphere
-        for _ in 0..subdivisions {
-            let result = subdivide(vertices, indices);
-            vertices = result.0;
-            indices = result.1;
-        }
-
-        // Translate and scale the vertices to the desired center and radius
-        for vertex in &mut vertices {
-            vertex.pos[0] = vertex.pos[0] * radius + center[0];
-            vertex.pos[1] = vertex.pos[1] * radius + center[1];
-            vertex.pos[2] = vertex.pos[2] * radius + center[2];
-        }
-
-        let indices: Vec<u16> = indices
-            .into_iter()
-            .flat_map(|array| array.into_iter())
-            .map(|id| id as u16)
-            .collect();
-
-        (vertices, indices)
-    }
+    indices.push(start_idx + v1 as u16);
+    indices.push(start_idx + v2 as u16);
+    indices.push(start_idx + v3 as u16);
 }
 
-fn generate_snake() -> (Vec<Vertex>, Vec<u16>) {
+fn generate_sphere(start_idx: u16, radius: f32, pos: [f32; 3]) -> (Vec<Vertex>, Vec<u16>) {
+    const LEN: usize = 30;
+    const CIRCLE_POINTS: usize = 30;
+    let mut vertices = vec![];
+
+    for ring in 0..LEN {
+        let v = ring as f32 / LEN as f32;
+        let phi = v * PI;
+
+        for segment in 0..CIRCLE_POINTS {
+            let u = segment as f32 / CIRCLE_POINTS as f32;
+            let theta = u * 2.0 * PI;
+
+            let x = theta.sin() * phi.sin();
+            let y = phi.cos();
+            let z = theta.cos() * phi.sin();
+
+            let pos = [x, y, z];
+
+            vertices.push(Vertex {
+                pos,
+                normal: [0.0, 0.0, 0.0],
+            });
+        }
+    }
+
+    let mut indices = Vec::new();
+
+    for i in 0..LEN - 1 {
+        // Push last triangle
+        push_triangle(
+            start_idx,
+            &mut vertices,
+            &mut indices,
+            (i + 1) * CIRCLE_POINTS - 1,
+            (i + 2) * CIRCLE_POINTS - 1,
+            i * CIRCLE_POINTS,
+        );
+        push_triangle(
+            start_idx,
+            &mut vertices,
+            &mut indices,
+            (i + 2) * CIRCLE_POINTS - 1,
+            (i + 1) * CIRCLE_POINTS,
+            i * CIRCLE_POINTS,
+        );
+
+        for j in 0..CIRCLE_POINTS - 1 {
+            push_triangle(
+                start_idx,
+                &mut vertices,
+                &mut indices,
+                i * CIRCLE_POINTS + j,
+                (i + 1) * CIRCLE_POINTS + j,
+                i * CIRCLE_POINTS + j + 1,
+            );
+            push_triangle(
+                start_idx,
+                &mut vertices,
+                &mut indices,
+                (i + 1) * CIRCLE_POINTS + j,
+                (i + 1) * CIRCLE_POINTS + j + 1,
+                i * CIRCLE_POINTS + j + 1,
+            );
+        }
+    }
+
+    for vertex in &mut vertices {
+        let multitude =
+            1.0 / (vertex.normal[0].powi(2) + vertex.normal[1].powi(2) + vertex.normal[2].powi(2));
+        vertex.normal[0] *= multitude;
+        vertex.normal[1] *= multitude;
+        vertex.normal[2] *= multitude;
+
+        vertex.pos[0] = vertex.pos[0] * radius + pos[0];
+        vertex.pos[1] = vertex.pos[1] * radius + pos[1];
+        vertex.pos[2] = vertex.pos[2] * radius + pos[2];
+    }
+
+    (vertices, indices)
+}
+
+fn generate_snake(start_idx: u16) -> (Vec<Vertex>, Vec<u16>) {
     const LEN: usize = 200;
     const CIRCLE_POINTS: usize = 30;
     let mut vertices = vec![
@@ -320,13 +253,11 @@ fn generate_snake() -> (Vec<Vertex>, Vec<u16>) {
             tangent[0] * normal[1] - tangent[1] * normal[0],
         ];
 
-        // Generate the circle in the plane defined by the normal and binormal vectors
         for j in 0..CIRCLE_POINTS {
             let angle = (PI * 2.0) * (j as f32) / (CIRCLE_POINTS as f32);
             let y1 = angle.cos() * RADIUS;
             let z1 = angle.sin() * RADIUS;
 
-            // Transform the circle into the perpendicular plane
             let circle_point = [
                 x + normal[0] * y1 + binormal[0] * z1,
                 y + normal[1] * y1 + binormal[1] * z1,
@@ -336,48 +267,23 @@ fn generate_snake() -> (Vec<Vertex>, Vec<u16>) {
             vertices[i * CIRCLE_POINTS + j].pos = circle_point;
         }
     }
-    let mut res_vertices = Vec::new();
+
     let mut indices = Vec::new();
-
-    let mut push_triangle = |v1, v2, v3| {
-        let mut p0: Vertex = vertices[v1];
-        let mut p1: Vertex = vertices[v2];
-        let mut p2: Vertex = vertices[v3];
-        let u = [
-            p1.pos[0] - p0.pos[0],
-            p1.pos[1] - p0.pos[1],
-            p1.pos[2] - p0.pos[2],
-        ];
-        let v = [
-            p2.pos[0] - p0.pos[0],
-            p2.pos[1] - p0.pos[1],
-            p2.pos[2] - p0.pos[2],
-        ];
-        let normal = [
-            u[1] * v[2] - u[2] * v[1], // x-component
-            u[2] * v[0] - u[0] * v[2], // y-component
-            u[0] * v[1] - u[1] * v[0], // z-component
-        ];
-        p0.normal = normal;
-        p1.normal = normal;
-        p2.normal = normal;
-
-        indices.push(res_vertices.len() as u16);
-        res_vertices.push(p0);
-        indices.push(res_vertices.len() as u16);
-        res_vertices.push(p1);
-        indices.push(res_vertices.len() as u16);
-        res_vertices.push(p2);
-    };
 
     for i in 0..LEN - 1 {
         // Push last triangle
         push_triangle(
+            start_idx,
+            &mut vertices,
+            &mut indices,
             (i + 1) * CIRCLE_POINTS - 1,
             i * CIRCLE_POINTS,
             (i + 2) * CIRCLE_POINTS - 1,
         );
         push_triangle(
+            start_idx,
+            &mut vertices,
+            &mut indices,
             (i + 2) * CIRCLE_POINTS - 1,
             i * CIRCLE_POINTS,
             (i + 1) * CIRCLE_POINTS,
@@ -385,11 +291,17 @@ fn generate_snake() -> (Vec<Vertex>, Vec<u16>) {
 
         for j in 0..CIRCLE_POINTS - 1 {
             push_triangle(
+                start_idx,
+                &mut vertices,
+                &mut indices,
                 i * CIRCLE_POINTS + j,
                 i * CIRCLE_POINTS + j + 1,
                 (i + 1) * CIRCLE_POINTS + j,
             );
             push_triangle(
+                start_idx,
+                &mut vertices,
+                &mut indices,
                 (i + 1) * CIRCLE_POINTS + j,
                 i * CIRCLE_POINTS + j + 1,
                 (i + 1) * CIRCLE_POINTS + j + 1,
@@ -397,9 +309,15 @@ fn generate_snake() -> (Vec<Vertex>, Vec<u16>) {
         }
     }
 
-    indices.push(0);
+    for vertex in &mut vertices {
+        let multitude =
+            1.0 / (vertex.normal[0].powi(2) + vertex.normal[1].powi(2) + vertex.normal[2].powi(2));
+        vertex.normal[0] *= multitude;
+        vertex.normal[1] *= multitude;
+        vertex.normal[2] *= multitude;
+    }
 
-    (res_vertices, indices)
+    (vertices, indices)
 }
 
 struct State<'a> {
@@ -413,13 +331,14 @@ struct State<'a> {
 
     snake: Snake,
 
-    sphere: Sphere,
-
     camera: Camera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
+
+    depth_texture: wgpu::Texture,
+    depth_texture_view: wgpu::TextureView,
 
     window: &'a Window,
 }
@@ -432,43 +351,15 @@ struct Snake {
 
 impl Snake {
     fn new(device: &wgpu::Device) -> Self {
-        let (vertices, indices) = generate_snake();
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(vertices.as_slice()),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(indices.as_slice()),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = indices.len() as u32;
-        Self {
-            vertex_buffer,
-            index_buffer,
-            num_indices,
-        }
-    }
-
-    fn render(&self, render_pass: &mut RenderPass) {
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
-    }
-}
-
-struct Sphere {
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
-}
-
-impl Sphere {
-    fn new(device: &wgpu::Device) -> Self {
-        let (vertices, indices) =
-            sphere::create_sphere(3, [-50.0, (-50.0f32 / 3.0).sin() * 5.0, 0.0], 4.0);
+        let (mut vertices, mut indices) = generate_snake(0);
+        let (mut vertices2, mut indices2) = generate_sphere(
+            vertices.len() as u16,
+            5.0,
+            [-50.0, (-50.0f32 / 3.0).sin() * 5.0, 0.0],
+        );
+        vertices.append(&mut vertices2);
+        indices.append(&mut indices2);
+        indices.push(0);
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -527,13 +418,7 @@ impl<'a> State<'a> {
                 &wgpu::DeviceDescriptor {
                     label: None,
                     required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                    // WebGL doesn't support all of wgpu's features, so if
-                    // we're building for the web we'll have to disable some.
-                    required_limits: if cfg!(target_arch = "wasm32") {
-                        wgpu::Limits::downlevel_webgl2_defaults()
-                    } else {
-                        wgpu::Limits::default()
-                    },
+                    required_limits: wgpu::Limits::default(),
                     memory_hints: Default::default(),
                 },
                 None, // Trace path
@@ -656,7 +541,13 @@ impl<'a> State<'a> {
                 // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::LessEqual,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: SAMPLE_COUNT,
                 mask: !0,
@@ -669,10 +560,26 @@ impl<'a> State<'a> {
             cache: None,
         });
 
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            view_formats: &[wgpu::TextureFormat::Depth32Float],
+            mip_level_count: 1,
+            sample_count: SAMPLE_COUNT,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float, // Common depth format
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            label: Some("depth_texture"),
+        });
+
+        let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
         let camera_controller = CameraController::new(0.3);
 
         let snake = Snake::new(&device);
-        let sphere = Sphere::new(&device);
 
         Self {
             surface,
@@ -682,7 +589,6 @@ impl<'a> State<'a> {
             size,
             render_pipeline,
             snake,
-            sphere,
 
             multisample_texture: None,
 
@@ -691,6 +597,9 @@ impl<'a> State<'a> {
             camera_buffer,
             camera_bind_group,
             camera_controller,
+
+            depth_texture,
+            depth_texture_view,
 
             window,
         }
@@ -790,15 +699,23 @@ impl<'a> State<'a> {
                     resolve_target: Some(&output_view),
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
+                            r: 0.0,
+                            g: 0.1,
+                            b: 0.2,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture_view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0), // Clear depth buffer to 1.0 (far plane)
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
@@ -806,7 +723,6 @@ impl<'a> State<'a> {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             self.snake.render(&mut render_pass);
-            // self.sphere.render(&mut render_pass);
         }
 
         queue.submit(iter::once(encoder.finish()));
