@@ -91,7 +91,6 @@ impl Vertex {
 }
 
 fn push_triangle(
-    start_idx: u16,
     vertices: &mut Vec<Vertex>,
     indices: &mut Vec<u16>,
     v1: usize,
@@ -123,12 +122,12 @@ fn push_triangle(
     vertices[v3].normal[1] += normal[1];
     vertices[v3].normal[2] += normal[2];
 
-    indices.push(start_idx + v1 as u16);
-    indices.push(start_idx + v2 as u16);
-    indices.push(start_idx + v3 as u16);
+    indices.push(v1 as u16);
+    indices.push(v2 as u16);
+    indices.push(v3 as u16);
 }
 
-fn generate_sphere(start_idx: u16, radius: f32, pos: [f32; 3]) -> (Vec<Vertex>, Vec<u16>) {
+fn generate_sphere(radius: f32, pos: [f32; 3]) -> (Vec<Vertex>, Vec<u16>) {
     const LEN: usize = 30;
     const CIRCLE_POINTS: usize = 30;
     let mut vertices = vec![];
@@ -159,7 +158,6 @@ fn generate_sphere(start_idx: u16, radius: f32, pos: [f32; 3]) -> (Vec<Vertex>, 
     for i in 0..LEN - 1 {
         // Push last triangle
         push_triangle(
-            start_idx,
             &mut vertices,
             &mut indices,
             (i + 1) * CIRCLE_POINTS - 1,
@@ -167,7 +165,6 @@ fn generate_sphere(start_idx: u16, radius: f32, pos: [f32; 3]) -> (Vec<Vertex>, 
             i * CIRCLE_POINTS,
         );
         push_triangle(
-            start_idx,
             &mut vertices,
             &mut indices,
             (i + 2) * CIRCLE_POINTS - 1,
@@ -177,7 +174,6 @@ fn generate_sphere(start_idx: u16, radius: f32, pos: [f32; 3]) -> (Vec<Vertex>, 
 
         for j in 0..CIRCLE_POINTS - 1 {
             push_triangle(
-                start_idx,
                 &mut vertices,
                 &mut indices,
                 i * CIRCLE_POINTS + j,
@@ -185,7 +181,6 @@ fn generate_sphere(start_idx: u16, radius: f32, pos: [f32; 3]) -> (Vec<Vertex>, 
                 i * CIRCLE_POINTS + j + 1,
             );
             push_triangle(
-                start_idx,
                 &mut vertices,
                 &mut indices,
                 (i + 1) * CIRCLE_POINTS + j,
@@ -210,7 +205,7 @@ fn generate_sphere(start_idx: u16, radius: f32, pos: [f32; 3]) -> (Vec<Vertex>, 
     (vertices, indices)
 }
 
-fn generate_snake(start_idx: u16) -> (Vec<Vertex>, Vec<u16>) {
+fn generate_snake() -> (Vec<Vertex>, Vec<u16>) {
     const LEN: usize = 200;
     const CIRCLE_POINTS: usize = 30;
     let mut vertices = vec![
@@ -273,7 +268,6 @@ fn generate_snake(start_idx: u16) -> (Vec<Vertex>, Vec<u16>) {
     for i in 0..LEN - 1 {
         // Push last triangle
         push_triangle(
-            start_idx,
             &mut vertices,
             &mut indices,
             (i + 1) * CIRCLE_POINTS - 1,
@@ -281,7 +275,6 @@ fn generate_snake(start_idx: u16) -> (Vec<Vertex>, Vec<u16>) {
             (i + 2) * CIRCLE_POINTS - 1,
         );
         push_triangle(
-            start_idx,
             &mut vertices,
             &mut indices,
             (i + 2) * CIRCLE_POINTS - 1,
@@ -291,7 +284,6 @@ fn generate_snake(start_idx: u16) -> (Vec<Vertex>, Vec<u16>) {
 
         for j in 0..CIRCLE_POINTS - 1 {
             push_triangle(
-                start_idx,
                 &mut vertices,
                 &mut indices,
                 i * CIRCLE_POINTS + j,
@@ -299,7 +291,6 @@ fn generate_snake(start_idx: u16) -> (Vec<Vertex>, Vec<u16>) {
                 (i + 1) * CIRCLE_POINTS + j,
             );
             push_triangle(
-                start_idx,
                 &mut vertices,
                 &mut indices,
                 (i + 1) * CIRCLE_POINTS + j,
@@ -330,6 +321,7 @@ struct State<'a> {
     multisample_texture: Option<wgpu::Texture>,
 
     snake: Snake,
+    sphere: Sphere,
 
     camera: Camera,
     camera_uniform: CameraUniform,
@@ -351,14 +343,7 @@ struct Snake {
 
 impl Snake {
     fn new(device: &wgpu::Device) -> Self {
-        let (mut vertices, mut indices) = generate_snake(0);
-        let (mut vertices2, mut indices2) = generate_sphere(
-            vertices.len() as u16,
-            5.0,
-            [-50.0, (-50.0f32 / 3.0).sin() * 5.0, 0.0],
-        );
-        vertices.append(&mut vertices2);
-        indices.append(&mut indices2);
+        let (mut vertices, mut indices) = generate_snake();
         indices.push(0);
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -380,6 +365,40 @@ impl Snake {
     }
 
     fn render(&self, render_pass: &mut RenderPass) {
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+    }
+}
+
+struct Sphere {
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
+}
+
+impl Sphere {
+    fn new(device: &wgpu::Device, radius: f32, center: [f32; 3]) -> Self {
+        let (vertices, indices) = generate_sphere(radius, center);
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(vertices.as_slice()),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(indices.as_slice()),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let num_indices = indices.len() as u32;
+        Self {
+            vertex_buffer,
+            index_buffer,
+            num_indices,
+        }
+    }
+
+    fn render(&self, render_pass: &mut wgpu::RenderPass) {
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
@@ -581,6 +600,8 @@ impl<'a> State<'a> {
 
         let snake = Snake::new(&device);
 
+        let sphere = Sphere::new(&device, 5.0, [-50.0, (-50.0f32 / 3.0).sin() * 5.0, 0.0]);
+
         Self {
             surface,
             device,
@@ -589,6 +610,7 @@ impl<'a> State<'a> {
             size,
             render_pipeline,
             snake,
+            sphere,
 
             multisample_texture: None,
 
@@ -723,6 +745,7 @@ impl<'a> State<'a> {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             self.snake.render(&mut render_pass);
+            self.sphere.render(&mut render_pass);
         }
 
         queue.submit(iter::once(encoder.finish()));
